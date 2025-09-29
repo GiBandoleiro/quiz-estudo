@@ -90,7 +90,6 @@
             transition: opacity .2s;
             border-radius: 4px;
         }
-
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -101,7 +100,6 @@
             border-radius: 50%;
             box-shadow: 0 0 4px rgba(0, 191, 255, 0.6);
         }
-
         input[type="range"]::-moz-range-thumb {
             width: 20px;
             height: 20px;
@@ -133,14 +131,23 @@
         .file-tag-remove:hover {
             color: #EF4444;
         }
-        /* Toggle specific styles */
-        .peer:checked ~ div {
-            background-color: #00BFFF;
+        /* Style for a transient success message */
+        .modal-success-card {
+            background-color: #10B981; /* success color */
+            color: #121212;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.6);
+            animation: fadeInOut 2s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(10px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-10px); }
         }
     </style>
 </head>
 <body class="bg-background text-text-primary min-h-screen p-4 flex justify-center items-start pt-10 md:pt-16">
-
     <div id="app" class="w-full max-w-lg mx-auto">
         <header class="text-center mb-10">
             <h1 class="text-3xl md:text-4xl font-extrabold text-accent mb-2 tracking-wider title-font">Gerador de Perguntas (QUIZ)</h1>
@@ -153,7 +160,7 @@
 
         <!-- Global Message/Loading Modal (Updated with Progress Bar) -->
         <div id="modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden" onclick="hideModal()">
-            <div class="card p-6 rounded-xl max-w-sm w-full" onclick="event.stopPropagation()">
+            <div id="modal-card" class="card p-6 rounded-xl max-w-sm w-full" onclick="event.stopPropagation()">
                 <div id="modal-content-container">
                     <p id="modal-text" class="text-center font-medium text-lg"></p>
                     <div id="progress-bar-container" class="mt-4 hidden">
@@ -169,18 +176,16 @@
             </div>
         </div>
     </div>
-
     <script>
         // Global variables and constants
         const TEXT_MODEL_NAME = "gemini-2.5-flash-preview-05-20";
-        const IMAGE_MODEL_NAME = "imagen-3.0-generate-002";
-        const arquivo_gerado = "AIzaSyA0LecQ2UW0nZvLTlnp-Utp4NHxVeIfvX8"; // Chave de API inserida conforme solicitação
-        const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL_NAME}:generateContent?key=${arquivo_gerado}`;
-        const imageApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL_NAME}:predict?key=${arquivo_gerado}`;
-
+        // Chave de API inserida conforme solicitação
+        const API_KEY = "AIzaSyA0LecQ2UW0nZvLTlnp-Utp4NHxVeIfvX8"; 
+        const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL_NAME}:generateContent?key=${API_KEY}`;
+        
         // Application State
         const state = {
-            view: 'input', // 'input', 'options', 'quiz', 'review'
+            view: 'input', // 'input', 'options', 'quiz', 'review', 'end'
             themeText: '',
             uploadedFiles: [], // Array de {name: string, content: string}
             numQuestions: 5,
@@ -188,8 +193,7 @@
             currentQuestionIndex: 0,
             score: 0,
             quizModeActive: false,
-            showReviewAnswers: false, 
-            enableImageQuestions: false, // Estado para habilitar imagens nas perguntas
+            showReviewAnswers: false,
         };
 
         const appDiv = document.getElementById('app');
@@ -197,13 +201,14 @@
         const modalDiv = document.getElementById('modal');
         const modalText = document.getElementById('modal-text');
         const modalCloseBtn = document.getElementById('modal-close-btn');
+        const modalCard = document.getElementById('modal-card'); 
 
         // Progress Bar variables
         let progressInterval = null;
         let currentProgress = 0;
+        let successTimeout = null; // Para o feedback de sucesso
 
         // --- Utility Functions ---
-
         /**
          * Simple exponential backoff for API calls.
          * @param {number} maxRetries Max number of retries.
@@ -222,13 +227,10 @@
         }
 
         // --- Modal/Progress Functions ---
-        
         function updateProgressBar(percentage) {
             const bar = document.getElementById('progress-bar');
             const text = document.getElementById('progress-text');
-            
             currentProgress = Math.min(percentage, 100);
-            
             if (bar && text) {
                 bar.style.width = `${currentProgress}%`;
                 text.textContent = `${currentProgress.toFixed(0)}%`;
@@ -240,29 +242,36 @@
             currentProgress = 0;
             updateProgressBar(0);
             
-            // Rapidly reach 90% to simulate processing time
+            // Simulate processing time by slowly increasing progress
             progressInterval = setInterval(() => {
-                if (currentProgress < 90) {
-                    currentProgress += Math.random() * 5 + 1; 
+                if (currentProgress < 95) { // Stop just before 100% to wait for real API response
+                    currentProgress += Math.random() * 2 + 1; 
                     updateProgressBar(currentProgress);
                 }
-            }, 300);
+            }, 500);
         }
-        
+
         function stopProgressSimulation() {
             clearInterval(progressInterval);
             progressInterval = null;
         }
 
         /**
-         * Displays the custom modal, handling progress bar or static message.
+         * Displays the custom modal.
          * @param {string} message The text to display.
          * @param {boolean} showCloseButton Whether to show the close button.
          * @param {boolean} showProgress Whether to show the progress bar.
+         * @param {boolean} isSuccess Temporary success mode for file upload feedback.
          */
-        function showModal(message, showCloseButton = false, showProgress = false) {
-            const modalContentContainer = document.getElementById('modal-content-container');
+        function showModal(message, showCloseButton = false, showProgress = false, isSuccess = false) {
+            // Clear any previous timeouts
+            if (successTimeout) clearTimeout(successTimeout);
+
             modalText.textContent = message;
+            
+            // Toggle success styling
+            modalCard.classList.toggle('modal-success-card', isSuccess);
+            modalCard.classList.toggle('card', !isSuccess); // Restore default card background
 
             const progressBarContainer = document.getElementById('progress-bar-container');
             if (showProgress) {
@@ -279,6 +288,11 @@
                 modalCloseBtn.classList.add('hidden');
             }
             modalDiv.classList.remove('hidden');
+
+            // Auto-hide success messages
+            if (isSuccess) {
+                successTimeout = setTimeout(hideModal, 1500); // 1.5 seconds for success message
+            }
         }
 
         /**
@@ -287,49 +301,13 @@
         function hideModal() {
             modalDiv.classList.add('hidden');
             stopProgressSimulation();
-        }
-
-        // --- API Integration: Image Generation ---
-
-        /**
-         * Calls Imagen API to generate a specific image for a question.
-         * Returns the base64 string or null on failure.
-         */
-        async function generateImageForQuestion(prompt) {
-            const payload = { 
-                instances: { prompt: prompt }, 
-                parameters: { 
-                    "sampleCount": 1,
-                    "aspectRatio": "1:1"
-                } 
-            };
-
-            try {
-                const response = await withBackoff(3, () => fetch(imageApiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                }));
-
-                const result = await response.json();
-                
-                if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
-                    return result.predictions[0].bytesBase64Encoded;
-                } 
-                return null;
-            } catch (error) {
-                // Log the error but fail silently so the quiz can continue without the image
-                console.error("Erro na geração da imagem da pergunta:", error);
-                return null;
+            if (successTimeout) {
+                clearTimeout(successTimeout);
+                successTimeout = null;
             }
         }
 
-
-        // --- API Integration: Quiz Generation ---
-
-        /**
-         * Constructs the prompt and calls the Gemini API to generate the quiz structure.
-         */
+        // --- API Integration: Quiz Generation (Simplified) ---
         async function generateQuiz() {
             const themeInput = document.getElementById('theme-input');
             state.themeText = themeInput ? themeInput.value.trim() : '';
@@ -338,7 +316,7 @@
             const fileContext = state.uploadedFiles
                 .map(f => `--- Conteúdo do Arquivo: ${f.name} ---\n${f.content}`)
                 .join('\n\n');
-            
+                
             const context = fileContext + (state.themeText ? `\n\n--- Tema Principal ---\n${state.themeText}` : '');
             const num = state.numQuestions;
 
@@ -346,23 +324,9 @@
                 showModal("Por favor, insira um tema ou carregue um arquivo.", true);
                 return;
             }
-            
-            // Conditionally construct the image prompt instruction
-            let imageInstruction = "";
-            let imagePromptProperty = {};
-            if (state.enableImageQuestions) {
-                // Aumentando a clareza para a IA sobre a geração do prompt de imagem
-                imageInstruction = "Se a opção 'Incluir imagens' estiver ativada, para *apenas 1 ou 2 perguntas* que se beneficiem de um visual (mapa, diagrama, gráfico), adicione o campo opcional 'imagePrompt' com uma descrição detalhada em inglês (DEVE ser em inglês) para gerar essa imagem. Para as demais perguntas, omita o campo 'imagePrompt'.";
-                imagePromptProperty = {
-                    "imagePrompt": {
-                        "type": "STRING",
-                        "description": "REQUIRED only if the question highly benefits from a visual aid (e.g., geography, history, science). Provide a detailed prompt in ENGLISH to generate a relevant image (e.g., 'A clear map of France highlighting Paris and Marseille'). Omit if not needed."
-                    }
-                };
-            }
 
             // System Instruction and User Query for Text Model
-            const systemPrompt = `Você é um gerador de quizzes inteligente e objetivo. Sua única função é analisar o tema ou conteúdo fornecido e gerar uma lista de perguntas de múltipla escolha. Cada pergunta deve ter 4 opções, e apenas uma deve ser correta. O número total de perguntas deve ser exatamente ${num}. ${imageInstruction} Sua resposta DEVE ser um objeto JSON estritamente conforme o esquema fornecido.`;
+            const systemPrompt = `Você é um gerador de quizzes inteligente e objetivo. Sua única função é analisar o tema ou conteúdo fornecido e gerar uma lista de perguntas de múltipla escolha. Cada pergunta deve ter 4 opções, e apenas uma deve ser correta. O número total de perguntas deve ser exatamente ${num}. Sua resposta DEVE ser um objeto JSON estritamente conforme o esquema fornecido.`;
             const userQuery = `Gere ${num} perguntas de múltipla escolha com 4 opções e o índice da resposta correta (de 0 a 3), baseado no seguinte tema ou conteúdo:\n\n---\n\n${context}`;
 
             const payload = {
@@ -378,8 +342,7 @@
                             properties: {
                                 "question": { "type": "STRING", "description": "O texto da pergunta." },
                                 "options": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "Quatro opções de resposta." },
-                                "correctAnswerIndex": { "type": "NUMBER", "description": "O índice (0 a 3) da opção correta na lista 'options'." },
-                                ...imagePromptProperty // Conditionally adds the imagePrompt property
+                                "correctAnswerIndex": { "type": "NUMBER", "description": "O índice (0 a 3) da opção correta na lista 'options'." }
                             },
                             required: ["question", "options", "correctAnswerIndex"]
                         }
@@ -387,19 +350,24 @@
                 }
             };
 
-            // START LOADING: Show progress bar modal
-            showModal("Gerando perguntas (Etapa 1 de 2)...", false, true);
+            // START LOADING: Show progress bar modal (This remains here, as API generation is slow)
+            showModal("Gerando perguntas...", false, true);
 
             try {
-                // 1. Generate Questions
                 const response = await withBackoff(3, () => fetch(textApiUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 }));
 
+                // Adicionado: Verificação robusta de erros HTTP (4xx, 5xx)
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    console.error("Erro HTTP da API:", response.status, response.statusText, errorBody);
+                    throw new Error(`Falha na comunicação com a API (Status: ${response.status}). Verifique a chave de API.`);
+                }
+
                 const result = await response.json();
-                
                 const candidate = result.candidates?.[0];
 
                 if (candidate && candidate.content?.parts?.[0]?.text) {
@@ -409,112 +377,109 @@
                     if (Array.isArray(parsedJson) && parsedJson.length > 0) {
                         state.questions = parsedJson.slice(0, num); // Safety slice
                         
-                        // 2. Generate Images for Questions (if enabled)
-                        updateProgressBar(30);
-                        if (state.enableImageQuestions) {
-                            const questionsWithPrompts = state.questions.filter(q => q.imagePrompt && q.imagePrompt.trim().length > 0);
-                            const totalImageQuestions = questionsWithPrompts.length;
-
-                            if (totalImageQuestions > 0) {
-                                modalText.textContent = `Gerando ${totalImageQuestions} imagem(ns) específica(s) para perguntas (Etapa 2 de 2)...`;
-                                
-                                for (let i = 0; i < totalImageQuestions; i++) {
-                                    const question = questionsWithPrompts[i];
-                                    const base64 = await generateImageForQuestion(question.imagePrompt);
-                                    question.imageBase64 = base64; // Store base64 directly on the question object
-                                    
-                                    // Update progress: 30% to 95% range for question images
-                                    const progress = 30 + (65 * (i + 1) / totalImageQuestions);
-                                    updateProgressBar(progress);
-                                }
-                            }
-                        }
-
-                        // 3. Complete and Render
                         updateProgressBar(100);
                         setTimeout(() => {
                             hideModal(); // Ensure modal is removed after successful generation
                             state.view = 'options';
                             render();
                         }, 300); 
-
                     } else {
+                        // Enhanced debugging for invalid JSON structure (if API returned 200 but bad data)
+                        console.error("Resposta da API (JSON Inválido ou Vazio):", parsedJson);
                         throw new Error("A API retornou uma estrutura de dados inválida ou vazia.");
                     }
                 } else {
-                    throw new Error("Falha ao receber conteúdo da API.");
+                    // Enhanced debugging for missing candidate content
+                    console.error("Resposta Completa da API (Candidato ausente):", result);
+                    
+                    // Verifica se há feedback de erro dos filtros de segurança
+                    let errorMessage = "Falha ao receber conteúdo da API.";
+                    if (result.promptFeedback?.safetyRatings?.length > 0) {
+                        errorMessage = "O conteúdo gerado foi bloqueado pelos filtros de segurança. Tente mudar o tema.";
+                    }
+                    throw new Error(errorMessage);
                 }
 
             } catch (error) {
                 console.error("Erro na geração do Quiz:", error);
                 hideModal(); // Make sure to hide the modal on error
+                // Usa a mensagem de erro específica capturada
                 showModal(`Erro ao gerar perguntas. Tente novamente ou verifique a chave de API. (${error.message})`, true);
             }
         }
 
         // --- File Handling ---
-
         /**
          * Reads the content of uploaded files and updates the state.
+         * REVISADA: Estrutura reforçada para garantir leitura e feedback visual correto.
          */
         function handleFileChange(event) {
             const files = event.target.files;
-            if (files.length === 0) return;
+            if (files.length === 0) {
+                event.target.value = ''; // Limpa se nada for selecionado
+                return;
+            }
 
-            // Clear previous files and reset the file input element's value
-            state.uploadedFiles = [];
-            event.target.value = '';
-
+            // Armazenamento temporário, o estado só é atualizado após todos os arquivos serem lidos
+            const newFiles = [];
             let pendingReads = files.length;
             let readErrors = 0;
-            const totalFiles = files.length;
-            let newFiles = [];
+            
+            // Limpa arquivos anteriores do estado e força uma re-renderização para limpar as tags antigas
+            state.uploadedFiles = [];
+            renderInputScreen(); 
 
-            showModal(`Lendo ${totalFiles} arquivo(s)...`, false);
+            /**
+             * Função que finaliza a leitura de um arquivo e verifica se todos terminaram.
+             */
+            const completeRead = () => {
+                pendingReads--;
+                if (pendingReads === 0) {
+                    // 1. Atualiza o estado com os arquivos lidos com sucesso
+                    state.uploadedFiles = newFiles; 
+                    
+                    // 2. Limpa o valor do input para permitir que o mesmo arquivo seja carregado novamente
+                    event.target.value = ''; 
+                    
+                    // 3. Renderiza para mostrar a lista de arquivos atualizada (tags)
+                    renderInputScreen(); 
+
+                    // 4. Mostra o feedback apropriado
+                    const readSuccess = newFiles.length;
+
+                    if (readSuccess > 0 && readErrors === 0) {
+                        // Todos lidos com sucesso
+                        showModal(`Arquivo(s) adicionado(s) com sucesso! (${readSuccess} arquivo(s) lido(s))`, false, false, true);
+                    } else if (readSuccess > 0 && readErrors > 0) {
+                        // Alguns foram lidos, mas houve erros
+                        showModal(`${readSuccess} arquivo(s) adicionado(s), mas ${readErrors} falhou(ram). Arquivos binários como PDF/PPT podem gerar texto ilegível.`, true);
+                    } else if (readErrors > 0 && readSuccess === 0) {
+                        // Todos falharam
+                        showModal("A leitura de todos os arquivos falhou. Certifique-se de que são arquivos de texto ou que o PDF/PPT não está corrompido.", true);
+                    }
+                }
+            };
 
             for (const file of files) {
-                if (!file.type.startsWith('text/')) {
-                    readErrors++;
-                    pendingReads--;
-                    console.error(`O arquivo ${file.name} não é um arquivo de texto e foi ignorado.`);
-                    continue;
-                }
-
                 const reader = new FileReader();
+                
                 reader.onload = (e) => {
+                    // Adiciona apenas arquivos que foram lidos com sucesso
                     newFiles.push({ name: file.name, content: e.target.result });
-                    pendingReads--;
-                    if (pendingReads === 0) {
-                        state.uploadedFiles = newFiles;
-                        renderInputScreen(); // Rerender to show the new list of files
-                        hideModal();
-                        if (readErrors > 0) {
-                            showModal(`A leitura de ${readErrors} arquivo(s) falhou.`, true);
-                        }
-                    }
+                    completeRead();
                 };
+                
                 reader.onerror = () => {
                     readErrors++;
-                    pendingReads--;
                     console.error(`Erro ao ler o arquivo ${file.name}.`);
-                    if (pendingReads === 0) {
-                        state.uploadedFiles = newFiles;
-                        renderInputScreen();
-                        hideModal();
-                        if (readErrors > 0) {
-                            showModal(`A leitura de ${readErrors} arquivo(s) falhou.`, true);
-                        }
-                    }
+                    completeRead();
                 };
+                
+                // Tenta ler todos como texto simples
                 reader.readAsText(file);
             }
-
-            if (totalFiles > 0 && totalFiles === readErrors) {
-                hideModal();
-                showModal("Nenhum arquivo de texto válido foi carregado.", true);
-            }
         }
-        
+
         /**
          * Removes a file from the uploaded list.
          * @param {number} index Index of the file to remove.
@@ -525,19 +490,10 @@
                 renderInputScreen(); // Rerender to update the displayed list
             }
         }
-        
-        /**
-         * Toggles the image questions state.
-         */
-        function toggleImageQuestions(event) {
-            state.enableImageQuestions = event.target.checked;
-        }
-
 
         // --- Rendering Functions ---
-
         /**
-         * Renders the initial input screen.
+         * Renders the initial input screen. (Image toggle removed)
          */
         function renderInputScreen() {
             const numQuestionsLabel = state.numQuestions === 1 ? 'pergunta' : 'perguntas';
@@ -559,10 +515,10 @@
                             <input type="text" id="theme-input" value="${state.themeText}" placeholder="Ex: A História do JavaScript"
                                 class="input-field flex-grow p-3 rounded-lg text-base">
 
-                            <input type="file" id="file-upload-input" accept="text/*" class="hidden" multiple onchange="handleFileChange(event)">
+                            <input type="file" id="file-upload-input" accept=".txt, .pdf, .ppt, .pptx" class="hidden" multiple onchange="handleFileChange(event)">
                             <button id="file-upload-btn" onclick="document.getElementById('file-upload-input').click()"
                                 class="btn-option p-3 rounded-lg bg-card text-accent border border-accent/50 flex-shrink-0"
-                                title="Carregar um ou mais arquivos de texto para contexto">
+                                title="Carregar arquivos .txt, .pdf ou .ppt para contexto">
                                 <i data-lucide="paperclip" class="w-5 h-5"></i>
                             </button>
                         </div>
@@ -570,6 +526,7 @@
                         <!-- File Tag Display Area -->
                         <div id="file-name" class="mt-3 text-xs flex flex-wrap min-h-[30px] items-center">
                             ${state.uploadedFiles.length > 0 ? fileListHtml : '<p class="text-text-secondary italic">Nenhum arquivo carregado. Use o campo ou o clipe para adicionar contexto.</p>'}
+                            <p class="text-text-secondary mt-1 text-xs w-full">Arquivos complexos (PDF/PPT) podem gerar texto ilegível. Use .txt para melhor precisão.</p>
                         </div>
                     </div>
 
@@ -584,15 +541,6 @@
                             class="w-full" oninput="updateNumQuestions(event)">
                     </div>
                     
-                    <!-- Novo Toggle para Imagens nas Perguntas -->
-                    <div class="flex items-center justify-between p-3 bg-card rounded-lg border border-gray-700">
-                        <label for="image-toggle" class="text-sm font-medium">Incluir imagens nas perguntas (Opcional)</label>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="image-toggle" class="sr-only peer" ${state.enableImageQuestions ? 'checked' : ''} onchange="toggleImageQuestions(event)">
-                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-accent rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                        </label>
-                    </div>
-
                     <button id="generate-btn" class="btn-accent w-full py-3 rounded-[12px] font-bold text-lg shadow-lg shadow-accent/30"
                         onclick="handleGenerateClick()">
                         Gerar
@@ -607,7 +555,7 @@
          */
         function renderOptionsScreen() {
             contentDiv.innerHTML = `
-                <div class="card p-8 space-y-6 text-center">
+                <div class="card p-8 text-center space-y-6">
                     <h2 class="text-2xl font-bold">Quiz Gerado!</h2>
                     <p class="text-text-secondary">Seu quiz de ${state.questions.length} perguntas está pronto.</p>
 
@@ -631,7 +579,7 @@
         }
 
         /**
-         * Renders the main quiz game interface.
+         * Renders the main quiz game interface. (Image display removed)
          */
         function renderQuizScreen() {
             if (state.currentQuestionIndex >= state.questions.length) {
@@ -646,17 +594,8 @@
             document.getElementById('current-score').classList.remove('hidden');
             document.getElementById('current-score').innerHTML = `Pontuação: <span class="text-accent font-bold">${state.score}</span> | Pergunta: <span class="text-accent font-bold">${qNum}/${totalNum}</span>`;
 
-            // Only check for specific question image
-            const imageBase64ToDisplay = current.imageBase64;
-            const imageSrc = imageBase64ToDisplay ? `data:image/png;base64,${imageBase64ToDisplay}` : null;
-
             contentDiv.innerHTML = `
-                ${imageSrc ? `
-                    <img src="${imageSrc}" 
-                         alt="Imagem do Quiz"
-                         class="w-full h-48 object-cover rounded-t-[16px] shadow-xl" />
-                ` : ''}
-                <div class="card p-6 md:p-8 space-y-6 ${imageSrc ? 'rounded-t-none mt-[-1px]' : ''}">
+                <div class="card p-6 md:p-8 space-y-6">
                     <p class="text-lg font-semibold mb-4">${qNum}. ${current.question}</p>
                     <div class="space-y-3" id="options-container">
                         ${current.options.map((option, index) => `
@@ -684,6 +623,9 @@
             const total = state.questions.length;
             const score = state.score;
             const percentage = ((score / total) * 100).toFixed(0);
+            
+            // Set view explicitly to 'end' so 'backToLastScreen' knows where to go.
+            state.view = 'end'; 
 
             contentDiv.innerHTML = `
                 <div class="card p-8 text-center space-y-6">
@@ -704,7 +646,7 @@
                             onclick="viewReview()">
                             <i data-lucide="list-checks" class="inline w-4 h-4 mr-2"></i> Ver Perguntas
                         </button>
-                        
+                                                
                         <button class="btn-option w-full py-3 rounded-[12px] font-semibold text-text-primary border-gray-700 hover:bg-gray-800"
                             onclick="resetState()">
                             <i data-lucide="home" class="inline w-4 h-4 mr-2"></i> Voltar ao Menu Principal
@@ -722,9 +664,16 @@
             state.showReviewAnswers = !state.showReviewAnswers;
             renderReviewScreen();
         }
+        
+        /**
+         * Switches the view back to the End Screen (results).
+         */
+        function backToEndScreen() {
+            renderEndScreen();
+        }
 
         /**
-         * Renders the review screen with all questions, hiding answers initially, and includes Redo Quiz option.
+         * Renders the review screen with all questions.
          */
         function renderReviewScreen() {
             document.getElementById('current-score').classList.add('hidden');
@@ -743,7 +692,6 @@
                     ${state.questions.map((q, qIndex) => `
                         <div class="card p-5 space-y-3">
                             <p class="text-lg font-semibold">${qIndex + 1}. ${q.question}</p>
-                            ${q.imageBase64 ? `<img src="data:image/png;base64,${q.imageBase64}" alt="Visual aid for question" class="w-full object-cover rounded-lg my-3 shadow-md border border-gray-700"/>` : ''}
                             <div class="space-y-2">
                                 ${q.options.map((option, oIndex) => {
                                     const isCorrect = oIndex === q.correctAnswerIndex;
@@ -767,8 +715,8 @@
                     `).join('')}
                 </div>
                 <div class="mt-6 space-y-3">
-                    <button class="btn-accent w-full py-3 rounded-[12px] font-bold text-lg" onclick="startQuizAgain()">
-                        <i data-lucide="rotate-ccw" class="inline w-4 h-4 mr-2"></i> Refazer Quiz
+                    <button class="btn-option w-full py-3 rounded-[12px] font-semibold text-text-primary border-gray-700 hover:bg-gray-800" onclick="backToEndScreen()">
+                        <i data-lucide="arrow-left" class="inline w-4 h-4 mr-2"></i> Voltar ao Fim do Quiz
                     </button>
                     <div class="text-center">
                         <button class="text-text-secondary hover:text-accent text-sm" onclick="resetState()">
@@ -781,7 +729,6 @@
         }
 
         // --- Event Handlers & Logic ---
-
         /**
          * Updates the number of questions state from the slider.
          */
@@ -872,7 +819,6 @@
             // Update score display immediately
             document.getElementById('current-score').innerHTML = `Pontuação: <span class="text-accent font-bold">${state.score}</span> | Pergunta: <span class="text-accent font-bold">${state.currentQuestionIndex + 1}/${state.questions.length}</span>`;
 
-
             // Move to next question after a brief delay
             setTimeout(() => {
                 state.currentQuestionIndex++;
@@ -893,7 +839,6 @@
             state.score = 0;
             state.quizModeActive = false;
             state.showReviewAnswers = false;
-            state.enableImageQuestions = false; // Reset image toggle
             document.getElementById('current-score').classList.add('hidden');
             render();
         }

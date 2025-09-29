@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Perguntas (QUIZ)</title>
+    <!-- Load Poppins Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800;900&display=swap" rel="stylesheet">
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Configure Tailwind for Dark Mode and Custom Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'background': '#121212',
+                        'card': '#1E1E1E',
+                        'accent': '#00BFFF', // Neon Blue
+                        'text-primary': '#E0E0E0',
+                        'text-secondary': '#A0A0A0',
+                        'success': '#10B981', // Green
+                        'error': '#EF4444', // Red
+                        'file-tag': '#3A3A3A',
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Apply Inter font for body, Poppins for titles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #121212;
+        }
+        .title-font {
+            font-family: 'Poppins', sans-serif;
+            letter-spacing: 0.05em;
+        }
+        .card {
+            background-color: #1E1E1E;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6); /* Slightly stronger shadow */
+            border: 1px solid #282828;
+            transition: all 0.3s ease-in-out;
+            border-radius: 16px;
+        }
+        .card:hover {
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.8);
+        }
+        .btn-accent {
+            background-color: #00BFFF;
+            color: #121212;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .btn-accent:hover:not(:disabled) {
+            background-color: #0099CC;
+            transform: translateY(-1px);
+        }
+        .btn-option {
+            background-color: #282828;
+            border: 1px solid #3A3A3A;
+            transition: all 0.2s;
+        }
+        .btn-option:hover:not(:disabled) {
+            background-color: #3A3A3A;
+            transform: scale(1.01);
+            border-color: #00BFFF;
+        }
+        .input-field {
+            background-color: #282828;
+            border: 1px solid #3A3A3A;
+            color: #E0E0E0;
+            transition: border-color 0.2s;
+        }
+        .input-field:focus {
+            border-color: #00BFFF;
+            outline: none;
+        }
+        /* Custom range slider styling for dark theme */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #3A3A3A;
+            outline: none;
+            opacity: 0.9;
+            transition: opacity .2s;
+            border-radius: 4px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #00BFFF;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(0, 191, 255, 0.6);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #00BFFF;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 0 4px rgba(0, 191, 255, 0.6);
+        }
+        /* Style for the file tags */
+        .file-tag {
+            background-color: #3A3A3A;
+            border: 1px solid #4A4A4A;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 0.85rem;
+            color: #E0E0E0;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            transition: background-color 0.2s;
+        }
+        .file-tag-remove {
+            cursor: pointer;
+            margin-left: 8px;
+            color: #A0A0A0;
+            transition: color 0.2s;
+        }
+        .file-tag-remove:hover {
+            color: #EF4444;
+        }
+        /* Toggle specific styles */
+        .peer:checked ~ div {
+            background-color: #00BFFF;
+        }
+    </style>
+</head>
+<body class="bg-background text-text-primary min-h-screen p-4 flex justify-center items-start pt-10 md:pt-16">
+
+    <div id="app" class="w-full max-w-lg mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-accent mb-2 tracking-wider title-font">Gerador de Perguntas (QUIZ)</h1>
+            <p id="current-score" class="text-lg text-text-secondary hidden"></p>
+        </header>
+
+        <div id="content" class="min-h-[400px] flex flex-col justify-center">
+            <!-- Content will be rendered here by JavaScript -->
+        </div>
+
+        <!-- Global Message/Loading Modal (Updated with Progress Bar) -->
+        <div id="modal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50 hidden" onclick="hideModal()">
+            <div class="card p-6 rounded-xl max-w-sm w-full" onclick="event.stopPropagation()">
+                <div id="modal-content-container">
+                    <p id="modal-text" class="text-center font-medium text-lg"></p>
+                    <div id="progress-bar-container" class="mt-4 hidden">
+                        <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div id="progress-bar" class="h-full bg-accent transition-all duration-500 ease-in-out" style="width: 0%"></div>
+                        </div>
+                        <p id="progress-text" class="text-center text-sm text-text-secondary mt-2">0%</p>
+                    </div>
+                </div>
+                <button id="modal-close-btn" class="w-full mt-4 btn-accent py-2 rounded-lg font-bold hidden" onclick="hideModal()">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables and constants
+        const TEXT_MODEL_NAME = "gemini-2.5-flash-preview-05-20";
+        const IMAGE_MODEL_NAME = "imagen-3.0-generate-002";
+        const arquivo_gerado = "AIzaSyA0LecQ2UW0nZvLTlnp-Utp4NHxVeIfvX8"; // Chave de API inserida conforme solicitação
+        const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL_NAME}:generateContent?key=${arquivo_gerado}`;
+        const imageApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL_NAME}:predict?key=${arquivo_gerado}`;
+
+        // Application State
+        const state = {
+            view: 'input', // 'input', 'options', 'quiz', 'review'
+            themeText: '',
+            uploadedFiles: [], // Array de {name: string, content: string}
+            numQuestions: 5,
+            questions: [],
+            currentQuestionIndex: 0,
+            score: 0,
+            quizModeActive: false,
+            showReviewAnswers: false, 
+            enableImageQuestions: false, // Estado para habilitar imagens nas perguntas
+        };
+
+        const appDiv = document.getElementById('app');
+        const contentDiv = document.getElementById('content');
+        const modalDiv = document.getElementById('modal');
+        const modalText = document.getElementById('modal-text');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+
+        // Progress Bar variables
+        let progressInterval = null;
+        let currentProgress = 0;
+
+        // --- Utility Functions ---
+
+        /**
+         * Simple exponential backoff for API calls.
+         * @param {number} maxRetries Max number of retries.
+         * @param {function} fn Function to execute.
+         */
+        async function withBackoff(maxRetries, fn) {
+            for (let i = 0; i <= maxRetries; i++) {
+                try {
+                    return await fn();
+                } catch (error) {
+                    if (i === maxRetries) throw error;
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // --- Modal/Progress Functions ---
+        
+        function updateProgressBar(percentage) {
+            const bar = document.getElementById('progress-bar');
+            const text = document.getElementById('progress-text');
+            
+            currentProgress = Math.min(percentage, 100);
+            
+            if (bar && text) {
+                bar.style.width = `${currentProgress}%`;
+                text.textContent = `${currentProgress.toFixed(0)}%`;
+            }
+        }
+
+        function startProgressSimulation() {
+            stopProgressSimulation(); // Clear any existing interval
+            currentProgress = 0;
+            updateProgressBar(0);
+            
+            // Rapidly reach 90% to simulate processing time
+            progressInterval = setInterval(() => {
+                if (currentProgress < 90) {
+                    currentProgress += Math.random() * 5 + 1; 
+                    updateProgressBar(currentProgress);
+                }
+            }, 300);
+        }
+        
+        function stopProgressSimulation() {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+
+        /**
+         * Displays the custom modal, handling progress bar or static message.
+         * @param {string} message The text to display.
+         * @param {boolean} showCloseButton Whether to show the close button.
+         * @param {boolean} showProgress Whether to show the progress bar.
+         */
+        function showModal(message, showCloseButton = false, showProgress = false) {
+            const modalContentContainer = document.getElementById('modal-content-container');
+            modalText.textContent = message;
+
+            const progressBarContainer = document.getElementById('progress-bar-container');
+            if (showProgress) {
+                progressBarContainer.classList.remove('hidden');
+                startProgressSimulation();
+            } else {
+                progressBarContainer.classList.add('hidden');
+                stopProgressSimulation();
+            }
+            
+            if (showCloseButton) {
+                modalCloseBtn.classList.remove('hidden');
+            } else {
+                modalCloseBtn.classList.add('hidden');
+            }
+            modalDiv.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the custom modal.
+         */
+        function hideModal() {
+            modalDiv.classList.add('hidden');
+            stopProgressSimulation();
+        }
+
+        // --- API Integration: Image Generation ---
+
+        /**
+         * Calls Imagen API to generate a specific image for a question.
+         * Returns the base64 string or null on failure.
+         */
+        async function generateImageForQuestion(prompt) {
+            const payload = { 
+                instances: { prompt: prompt }, 
+                parameters: { 
+                    "sampleCount": 1,
+                    "aspectRatio": "1:1"
+                } 
+            };
+
+            try {
+                const response = await withBackoff(3, () => fetch(imageApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }));
+
+                const result = await response.json();
+                
+                if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                    return result.predictions[0].bytesBase64Encoded;
+                } 
+                return null;
+            } catch (error) {
+                // Log the error but fail silently so the quiz can continue without the image
+                console.error("Erro na geração da imagem da pergunta:", error);
+                return null;
+            }
+        }
+
+
+        // --- API Integration: Quiz Generation ---
+
+        /**
+         * Constructs the prompt and calls the Gemini API to generate the quiz structure.
+         */
+        async function generateQuiz() {
+            const themeInput = document.getElementById('theme-input');
+            state.themeText = themeInput ? themeInput.value.trim() : '';
+
+            // Combine theme text and file content.
+            const fileContext = state.uploadedFiles
+                .map(f => `--- Conteúdo do Arquivo: ${f.name} ---\n${f.content}`)
+                .join('\n\n');
+            
+            const context = fileContext + (state.themeText ? `\n\n--- Tema Principal ---\n${state.themeText}` : '');
+            const num = state.numQuestions;
+
+            if (!context || context.trim().length === 0) {
+                showModal("Por favor, insira um tema ou carregue um arquivo.", true);
+                return;
+            }
+            
+            // Conditionally construct the image prompt instruction
+            let imageInstruction = "";
+            let imagePromptProperty = {};
+            if (state.enableImageQuestions) {
+                // Aumentando a clareza para a IA sobre a geração do prompt de imagem
+                imageInstruction = "Se a opção 'Incluir imagens' estiver ativada, para *apenas 1 ou 2 perguntas* que se beneficiem de um visual (mapa, diagrama, gráfico), adicione o campo opcional 'imagePrompt' com uma descrição detalhada em inglês (DEVE ser em inglês) para gerar essa imagem. Para as demais perguntas, omita o campo 'imagePrompt'.";
+                imagePromptProperty = {
+                    "imagePrompt": {
+                        "type": "STRING",
+                        "description": "REQUIRED only if the question highly benefits from a visual aid (e.g., geography, history, science). Provide a detailed prompt in ENGLISH to generate a relevant image (e.g., 'A clear map of France highlighting Paris and Marseille'). Omit if not needed."
+                    }
+                };
+            }
+
+            // System Instruction and User Query for Text Model
+            const systemPrompt = `Você é um gerador de quizzes inteligente e objetivo. Sua única função é analisar o tema ou conteúdo fornecido e gerar uma lista de perguntas de múltipla escolha. Cada pergunta deve ter 4 opções, e apenas uma deve ser correta. O número total de perguntas deve ser exatamente ${num}. ${imageInstruction} Sua resposta DEVE ser um objeto JSON estritamente conforme o esquema fornecido.`;
+            const userQuery = `Gere ${num} perguntas de múltipla escolha com 4 opções e o índice da resposta correta (de 0 a 3), baseado no seguinte tema ou conteúdo:\n\n---\n\n${context}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        description: "Lista de perguntas do quiz.",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "question": { "type": "STRING", "description": "O texto da pergunta." },
+                                "options": { "type": "ARRAY", "items": { "type": "STRING" }, "description": "Quatro opções de resposta." },
+                                "correctAnswerIndex": { "type": "NUMBER", "description": "O índice (0 a 3) da opção correta na lista 'options'." },
+                                ...imagePromptProperty // Conditionally adds the imagePrompt property
+                            },
+                            required: ["question", "options", "correctAnswerIndex"]
+                        }
+                    }
+                }
+            };
+
+            // START LOADING: Show progress bar modal
+            showModal("Gerando perguntas (Etapa 1 de 2)...", false, true);
+
+            try {
+                // 1. Generate Questions
+                const response = await withBackoff(3, () => fetch(textApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }));
+
+                const result = await response.json();
+                
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    const jsonString = candidate.content.parts[0].text;
+                    const parsedJson = JSON.parse(jsonString);
+
+                    if (Array.isArray(parsedJson) && parsedJson.length > 0) {
+                        state.questions = parsedJson.slice(0, num); // Safety slice
+                        
+                        // 2. Generate Images for Questions (if enabled)
+                        updateProgressBar(30);
+                        if (state.enableImageQuestions) {
+                            const questionsWithPrompts = state.questions.filter(q => q.imagePrompt && q.imagePrompt.trim().length > 0);
+                            const totalImageQuestions = questionsWithPrompts.length;
+
+                            if (totalImageQuestions > 0) {
+                                modalText.textContent = `Gerando ${totalImageQuestions} imagem(ns) específica(s) para perguntas (Etapa 2 de 2)...`;
+                                
+                                for (let i = 0; i < totalImageQuestions; i++) {
+                                    const question = questionsWithPrompts[i];
+                                    const base64 = await generateImageForQuestion(question.imagePrompt);
+                                    question.imageBase64 = base64; // Store base64 directly on the question object
+                                    
+                                    // Update progress: 30% to 95% range for question images
+                                    const progress = 30 + (65 * (i + 1) / totalImageQuestions);
+                                    updateProgressBar(progress);
+                                }
+                            }
+                        }
+
+                        // 3. Complete and Render
+                        updateProgressBar(100);
+                        setTimeout(() => {
+                            hideModal(); // Ensure modal is removed after successful generation
+                            state.view = 'options';
+                            render();
+                        }, 300); 
+
+                    } else {
+                        throw new Error("A API retornou uma estrutura de dados inválida ou vazia.");
+                    }
+                } else {
+                    throw new Error("Falha ao receber conteúdo da API.");
+                }
+
+            } catch (error) {
+                console.error("Erro na geração do Quiz:", error);
+                hideModal(); // Make sure to hide the modal on error
+                showModal(`Erro ao gerar perguntas. Tente novamente ou verifique a chave de API. (${error.message})`, true);
+            }
+        }
+
+        // --- File Handling ---
+
+        /**
+         * Reads the content of uploaded files and updates the state.
+         */
+        function handleFileChange(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+
+            // Clear previous files and reset the file input element's value
+            state.uploadedFiles = [];
+            event.target.value = '';
+
+            let pendingReads = files.length;
+            let readErrors = 0;
+            const totalFiles = files.length;
+            let newFiles = [];
+
+            showModal(`Lendo ${totalFiles} arquivo(s)...`, false);
+
+            for (const file of files) {
+                if (!file.type.startsWith('text/')) {
+                    readErrors++;
+                    pendingReads--;
+                    console.error(`O arquivo ${file.name} não é um arquivo de texto e foi ignorado.`);
+                    continue;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    newFiles.push({ name: file.name, content: e.target.result });
+                    pendingReads--;
+                    if (pendingReads === 0) {
+                        state.uploadedFiles = newFiles;
+                        renderInputScreen(); // Rerender to show the new list of files
+                        hideModal();
+                        if (readErrors > 0) {
+                            showModal(`A leitura de ${readErrors} arquivo(s) falhou.`, true);
+                        }
+                    }
+                };
+                reader.onerror = () => {
+                    readErrors++;
+                    pendingReads--;
+                    console.error(`Erro ao ler o arquivo ${file.name}.`);
+                    if (pendingReads === 0) {
+                        state.uploadedFiles = newFiles;
+                        renderInputScreen();
+                        hideModal();
+                        if (readErrors > 0) {
+                            showModal(`A leitura de ${readErrors} arquivo(s) falhou.`, true);
+                        }
+                    }
+                };
+                reader.readAsText(file);
+            }
+
+            if (totalFiles > 0 && totalFiles === readErrors) {
+                hideModal();
+                showModal("Nenhum arquivo de texto válido foi carregado.", true);
+            }
+        }
+        
+        /**
+         * Removes a file from the uploaded list.
+         * @param {number} index Index of the file to remove.
+         */
+        function removeFile(index) {
+            if (index >= 0 && index < state.uploadedFiles.length) {
+                state.uploadedFiles.splice(index, 1);
+                renderInputScreen(); // Rerender to update the displayed list
+            }
+        }
+        
+        /**
+         * Toggles the image questions state.
+         */
+        function toggleImageQuestions(event) {
+            state.enableImageQuestions = event.target.checked;
+        }
+
+
+        // --- Rendering Functions ---
+
+        /**
+         * Renders the initial input screen.
+         */
+        function renderInputScreen() {
+            const numQuestionsLabel = state.numQuestions === 1 ? 'pergunta' : 'perguntas';
+            
+            // Build the file display list
+            const fileListHtml = state.uploadedFiles.map((file, index) => `
+                <span class="file-tag">
+                    <i data-lucide="file-text" class="w-3 h-3 mr-2"></i>
+                    ${file.name}
+                    <i data-lucide="x" class="file-tag-remove w-3 h-3" onclick="removeFile(${index})"></i>
+                </span>
+            `).join('');
+
+            contentDiv.innerHTML = `
+                <div class="card p-6 md:p-8 space-y-6">
+                    <div>
+                        <label for="theme-input" class="block text-text-secondary mb-2 text-sm">Insira o tema</label>
+                        <div class="flex space-x-2">
+                            <input type="text" id="theme-input" value="${state.themeText}" placeholder="Ex: A História do JavaScript"
+                                class="input-field flex-grow p-3 rounded-lg text-base">
+
+                            <input type="file" id="file-upload-input" accept="text/*" class="hidden" multiple onchange="handleFileChange(event)">
+                            <button id="file-upload-btn" onclick="document.getElementById('file-upload-input').click()"
+                                class="btn-option p-3 rounded-lg bg-card text-accent border border-accent/50 flex-shrink-0"
+                                title="Carregar um ou mais arquivos de texto para contexto">
+                                <i data-lucide="paperclip" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- File Tag Display Area -->
+                        <div id="file-name" class="mt-3 text-xs flex flex-wrap min-h-[30px] items-center">
+                            ${state.uploadedFiles.length > 0 ? fileListHtml : '<p class="text-text-secondary italic">Nenhum arquivo carregado. Use o campo ou o clipe para adicionar contexto.</p>'}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="num-questions" class="text-text-secondary text-sm">
+                                Quantas perguntas deseja gerar?
+                            </label>
+                            <span id="num-display" class="font-bold text-lg text-accent">${state.numQuestions} ${numQuestionsLabel}</span>
+                        </div>
+                        <input type="range" id="num-questions" min="1" max="30" value="${state.numQuestions}"
+                            class="w-full" oninput="updateNumQuestions(event)">
+                    </div>
+                    
+                    <!-- Novo Toggle para Imagens nas Perguntas -->
+                    <div class="flex items-center justify-between p-3 bg-card rounded-lg border border-gray-700">
+                        <label for="image-toggle" class="text-sm font-medium">Incluir imagens nas perguntas (Opcional)</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="image-toggle" class="sr-only peer" ${state.enableImageQuestions ? 'checked' : ''} onchange="toggleImageQuestions(event)">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-accent rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                        </label>
+                    </div>
+
+                    <button id="generate-btn" class="btn-accent w-full py-3 rounded-[12px] font-bold text-lg shadow-lg shadow-accent/30"
+                        onclick="handleGenerateClick()">
+                        Gerar
+                    </button>
+                </div>
+            `;
+            lucide.createIcons(); // Initialize Lucide icons
+        }
+
+        /**
+         * Renders the screen with options to start the quiz or view all questions.
+         */
+        function renderOptionsScreen() {
+            contentDiv.innerHTML = `
+                <div class="card p-8 space-y-6 text-center">
+                    <h2 class="text-2xl font-bold">Quiz Gerado!</h2>
+                    <p class="text-text-secondary">Seu quiz de ${state.questions.length} perguntas está pronto.</p>
+
+                    <button class="btn-accent w-full py-4 rounded-[12px] font-bold text-lg shadow-lg shadow-accent/30"
+                        onclick="startQuiz()">
+                        Iniciar Quiz
+                    </button>
+
+                    <button class="btn-option w-full py-3 rounded-[12px] font-semibold bg-card text-accent border border-accent/50 hover:bg-accent/20"
+                        onclick="viewReview()">
+                        Ver todas as perguntas
+                    </button>
+                </div>
+                <div class="mt-6 text-center">
+                    <button class="text-text-secondary hover:text-accent text-sm" onclick="resetState()">
+                        <i data-lucide="arrow-left" class="inline w-4 h-4 mr-1"></i> Voltar
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        /**
+         * Renders the main quiz game interface.
+         */
+        function renderQuizScreen() {
+            if (state.currentQuestionIndex >= state.questions.length) {
+                renderEndScreen();
+                return;
+            }
+
+            const current = state.questions[state.currentQuestionIndex];
+            const qNum = state.currentQuestionIndex + 1;
+            const totalNum = state.questions.length;
+
+            document.getElementById('current-score').classList.remove('hidden');
+            document.getElementById('current-score').innerHTML = `Pontuação: <span class="text-accent font-bold">${state.score}</span> | Pergunta: <span class="text-accent font-bold">${qNum}/${totalNum}</span>`;
+
+            // Only check for specific question image
+            const imageBase64ToDisplay = current.imageBase64;
+            const imageSrc = imageBase64ToDisplay ? `data:image/png;base64,${imageBase64ToDisplay}` : null;
+
+            contentDiv.innerHTML = `
+                ${imageSrc ? `
+                    <img src="${imageSrc}" 
+                         alt="Imagem do Quiz"
+                         class="w-full h-48 object-cover rounded-t-[16px] shadow-xl" />
+                ` : ''}
+                <div class="card p-6 md:p-8 space-y-6 ${imageSrc ? 'rounded-t-none mt-[-1px]' : ''}">
+                    <p class="text-lg font-semibold mb-4">${qNum}. ${current.question}</p>
+                    <div class="space-y-3" id="options-container">
+                        ${current.options.map((option, index) => `
+                            <button class="btn-option w-full text-left p-4 rounded-lg text-base"
+                                onclick="handleAnswer(${index})" id="option-${index}">
+                                ${String.fromCharCode(65 + index)}. ${option}
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="mt-6 text-center">
+                    <button class="text-text-secondary hover:text-error text-sm" onclick="resetState()">
+                        <i data-lucide="x-circle" class="inline w-4 h-4 mr-1"></i> Sair do Quiz
+                    </button>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        /**
+         * Renders the quiz results/end screen.
+         */
+        function renderEndScreen() {
+            document.getElementById('current-score').classList.add('hidden');
+            const total = state.questions.length;
+            const score = state.score;
+            const percentage = ((score / total) * 100).toFixed(0);
+
+            contentDiv.innerHTML = `
+                <div class="card p-8 text-center space-y-6">
+                    <h2 class="text-3xl font-bold text-accent">Quiz Concluído!</h2>
+                    <div class="space-y-2">
+                        <p class="text-xl font-semibold">Sua Pontuação Final:</p>
+                        <p class="text-5xl font-extrabold text-success">${score} / ${total}</p>
+                        <p class="text-lg text-text-secondary">Aproveitamento: ${percentage}%</p>
+                    </div>
+
+                    <div class="space-y-3 mt-6">
+                        <button class="btn-accent w-full py-3 rounded-[12px] font-bold text-lg"
+                            onclick="startQuizAgain()">
+                            <i data-lucide="rotate-ccw" class="inline w-4 h-4 mr-2"></i> Jogar Novamente
+                        </button>
+
+                        <button class="btn-option w-full py-3 rounded-[12px] font-semibold text-accent"
+                            onclick="viewReview()">
+                            <i data-lucide="list-checks" class="inline w-4 h-4 mr-2"></i> Ver Perguntas
+                        </button>
+                        
+                        <button class="btn-option w-full py-3 rounded-[12px] font-semibold text-text-primary border-gray-700 hover:bg-gray-800"
+                            onclick="resetState()">
+                            <i data-lucide="home" class="inline w-4 h-4 mr-2"></i> Voltar ao Menu Principal
+                        </button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        /**
+         * Toggles the visibility of correct answers in review mode.
+         */
+        function toggleReviewAnswers() {
+            state.showReviewAnswers = !state.showReviewAnswers;
+            renderReviewScreen();
+        }
+
+        /**
+         * Renders the review screen with all questions, hiding answers initially, and includes Redo Quiz option.
+         */
+        function renderReviewScreen() {
+            document.getElementById('current-score').classList.add('hidden');
+            const buttonText = state.showReviewAnswers ? 'Esconder Respostas' : 'Mostrar Respostas';
+            const iconName = state.showReviewAnswers ? 'eye-off' : 'eye';
+
+            contentDiv.innerHTML = `
+                <div class="text-center mb-6 space-y-4">
+                    <h2 class="text-2xl font-bold">Revisão das Perguntas</h2>
+                    <button class="btn-option py-2 px-4 rounded-lg font-semibold text-text-primary border border-accent/50 hover:bg-accent/20"
+                        onclick="toggleReviewAnswers()">
+                        <i data-lucide="${iconName}" class="inline w-4 h-4 mr-2"></i> ${buttonText}
+                    </button>
+                </div>
+                <div class="space-y-6">
+                    ${state.questions.map((q, qIndex) => `
+                        <div class="card p-5 space-y-3">
+                            <p class="text-lg font-semibold">${qIndex + 1}. ${q.question}</p>
+                            ${q.imageBase64 ? `<img src="data:image/png;base64,${q.imageBase64}" alt="Visual aid for question" class="w-full object-cover rounded-lg my-3 shadow-md border border-gray-700"/>` : ''}
+                            <div class="space-y-2">
+                                ${q.options.map((option, oIndex) => {
+                                    const isCorrect = oIndex === q.correctAnswerIndex;
+                                    
+                                    let style = 'bg-card border-gray-700 text-text-primary';
+                                    let icon = '';
+
+                                    if (state.showReviewAnswers && isCorrect) {
+                                        style = 'bg-success/20 border-success text-success font-bold';
+                                        icon = '<i data-lucide="check-circle" class="inline w-4 h-4 ml-2 align-text-bottom"></i>';
+                                    }
+
+                                    return `
+                                        <div class="p-3 rounded-lg border ${style} transition-colors duration-300">
+                                            ${String.fromCharCode(65 + oIndex)}. ${option} ${icon}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="mt-6 space-y-3">
+                    <button class="btn-accent w-full py-3 rounded-[12px] font-bold text-lg" onclick="startQuizAgain()">
+                        <i data-lucide="rotate-ccw" class="inline w-4 h-4 mr-2"></i> Refazer Quiz
+                    </button>
+                    <div class="text-center">
+                        <button class="text-text-secondary hover:text-accent text-sm" onclick="resetState()">
+                            <i data-lucide="home" class="inline w-4 h-4 mr-1"></i> Voltar ao Menu Principal
+                        </button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // --- Event Handlers & Logic ---
+
+        /**
+         * Updates the number of questions state from the slider.
+         */
+        function updateNumQuestions(event) {
+            state.numQuestions = parseInt(event.target.value);
+            const numQuestionsLabel = state.numQuestions === 1 ? 'pergunta' : 'perguntas';
+            document.getElementById('num-display').textContent = `${state.numQuestions} ${numQuestionsLabel}`;
+        }
+
+        /**
+         * Handles the main "Gerar" button click.
+         */
+        function handleGenerateClick() {
+            const themeInput = document.getElementById('theme-input');
+            state.themeText = themeInput ? themeInput.value.trim() : '';
+            
+            // Context is valid if theme text is present OR if files were loaded
+            const contextValid = state.themeText.length > 0 || state.uploadedFiles.length > 0;
+
+            if (!contextValid) {
+                showModal("Por favor, insira um tema ou carregue um arquivo para gerar o quiz.", true);
+                return;
+            }
+            generateQuiz();
+        }
+
+        /**
+         * Initializes quiz state and switches to quiz view.
+         */
+        function startQuiz() {
+            state.view = 'quiz';
+            state.currentQuestionIndex = 0;
+            state.score = 0;
+            state.quizModeActive = true;
+            render();
+        }
+
+        /**
+         * Restarts the quiz using the already generated questions.
+         */
+        function startQuizAgain() {
+            state.view = 'quiz';
+            state.currentQuestionIndex = 0;
+            state.score = 0;
+            state.quizModeActive = true;
+            render();
+        }
+
+        /**
+         * Switches to review view and resets answer visibility.
+         */
+        function viewReview() {
+            state.view = 'review';
+            state.quizModeActive = false;
+            state.showReviewAnswers = false; // Start with answers hidden
+            render();
+        }
+
+        /**
+         * Handles the user selecting an answer in quiz mode.
+         */
+        function handleAnswer(selectedIndex) {
+            if (!state.quizModeActive) return;
+
+            const current = state.questions[state.currentQuestionIndex];
+            const isCorrect = selectedIndex === current.correctAnswerIndex;
+            const optionsContainer = document.getElementById('options-container');
+
+            // Disable all buttons to prevent double-clicking
+            Array.from(optionsContainer.children).forEach(btn => btn.disabled = true);
+
+            // Highlight chosen and correct answer
+            const selectedBtn = document.getElementById(`option-${selectedIndex}`);
+            const correctBtn = document.getElementById(`option-${current.correctAnswerIndex}`);
+
+            if (isCorrect) {
+                state.score++;
+                selectedBtn.classList.replace('border-gray-700', 'border-success');
+                selectedBtn.classList.add('bg-success/50', 'text-white', 'font-bold');
+            } else {
+                selectedBtn.classList.replace('border-gray-700', 'border-error');
+                selectedBtn.classList.add('bg-error/50', 'text-white', 'font-bold');
+                // Also highlight the correct one
+                correctBtn.classList.replace('border-gray-700', 'border-success');
+                correctBtn.classList.add('bg-success/20', 'text-success', 'font-bold');
+            }
+
+            // Update score display immediately
+            document.getElementById('current-score').innerHTML = `Pontuação: <span class="text-accent font-bold">${state.score}</span> | Pergunta: <span class="text-accent font-bold">${state.currentQuestionIndex + 1}/${state.questions.length}</span>`;
+
+
+            // Move to next question after a brief delay
+            setTimeout(() => {
+                state.currentQuestionIndex++;
+                render();
+            }, 1200);
+        }
+
+        /**
+         * Resets the application state to the initial input screen.
+         */
+        function resetState() {
+            // Resets all state variables
+            state.view = 'input';
+            state.uploadedFiles = [];
+            state.themeText = '';
+            state.questions = [];
+            state.currentQuestionIndex = 0;
+            state.score = 0;
+            state.quizModeActive = false;
+            state.showReviewAnswers = false;
+            state.enableImageQuestions = false; // Reset image toggle
+            document.getElementById('current-score').classList.add('hidden');
+            render();
+        }
+
+        /**
+         * Main render function based on the current state view.
+         */
+        function render() {
+            switch (state.view) {
+                case 'input':
+                    renderInputScreen();
+                    break;
+                case 'options':
+                    renderOptionsScreen();
+                    break;
+                case 'quiz':
+                    renderQuizScreen();
+                    break;
+                case 'review':
+                    renderReviewScreen();
+                    break;
+                case 'end':
+                    renderEndScreen();
+                    break;
+                default:
+                    renderInputScreen();
+            }
+        }
+
+        // Initial render call
+        window.onload = render;
+    </script>
+</body>
+</html>

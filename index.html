@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gerador de Perguntas (QUIZ)</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@700;800;900&display=swap" rel="stylesheet">
-<link rel="icon" type="image/png" href="logoLivro.png">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script>
@@ -187,7 +187,7 @@
     </div>
     <script>
         // Global variables and constants
-        const TEXT_MODEL_NAME = "gemini-1.5-flash-preview-0514";
+        const TEXT_MODEL_NAME = "gemini-2.5-flash-preview-05-20";
         // Chave de API inserida conforme solicitação
         const API_KEY = "AIzaSyA0LecQ2UW0nZvLTlnp-Utp4NHxVeIfvX8"; 
         const textApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${TEXT_MODEL_NAME}:generateContent?key=${API_KEY}`;
@@ -195,6 +195,7 @@
         // Application State
         const state = {
             view: 'input', // 'input', 'options', 'quiz', 'review', 'end'
+            previousView: 'input', // Para rastrear a tela anterior
             themeText: '',
             uploadedFiles: [], // Array de {name: string, content: string}
             numQuestions: 5,
@@ -674,10 +675,11 @@
         }
         
         /**
-         * Switches the view back to the End Screen (results).
+         * Switches the view back to the previously active screen.
          */
-        function backToEndScreen() {
-            renderEndScreen();
+        function backToPreviousScreen() {
+            state.view = state.previousView;
+            render();
         }
 
         /**
@@ -687,6 +689,11 @@
             document.getElementById('current-score').classList.add('hidden');
             const buttonText = state.showReviewAnswers ? 'Esconder Respostas' : 'Mostrar Respostas';
             const iconName = state.showReviewAnswers ? 'eye-off' : 'eye';
+
+            // Lógica para o botão "Voltar"
+            const backButtonText = state.previousView === 'end' ? 'Voltar ao Resultado' : 'Voltar às Opções';
+            const backButtonIcon = 'arrow-left';
+
 
             contentDiv.innerHTML = `
                 <div class="text-center mb-6 space-y-4">
@@ -723,9 +730,9 @@
                     `).join('')}
                 </div>
                 <div class="mt-6 space-y-3">
-                    <button class="btn-option w-full py-3 rounded-[12px] font-semibold text-text-primary border-gray-700 hover:bg-gray-800" onclick="backToEndScreen()">
-                        <i data-lucide="arrow-left" class="inline w-4 h-4 mr-2"></i> Voltar ao Fim do Quiz
-                    </button>
+                     <button class="btn-option w-full py-3 rounded-[12px] font-semibold text-text-primary border-gray-700 hover:bg-gray-800" onclick="backToPreviousScreen()">
+                         <i data-lucide="${backButtonIcon}" class="inline w-4 h-4 mr-2"></i> ${backButtonText}
+                     </button>
                     <div class="text-center">
                         <button class="text-text-secondary hover:text-accent text-sm" onclick="resetState()">
                             <i data-lucide="home" class="inline w-4 h-4 mr-1"></i> Voltar ao Menu Principal
@@ -789,6 +796,7 @@
          * Switches to review view and resets answer visibility.
          */
         function viewReview() {
+            state.previousView = state.view; // Salva de onde viemos ('options' ou 'end')
             state.view = 'review';
             state.quizModeActive = false;
             state.showReviewAnswers = false; // Start with answers hidden
@@ -881,3 +889,4 @@
     </script>
 </body>
 </html>
+
